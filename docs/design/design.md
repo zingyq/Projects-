@@ -11,14 +11,6 @@ Paleta kolorów (hex):
     Akcent: #3500D3
     Akcent2: #4F46E5
     Tekst: #E6EEF6
-
-Czcionki:
-
-    Nagłówki: Inter
-    Treść: Roboto
-
-Logo:
-
    
     
 Krótkie podsumowanie:
