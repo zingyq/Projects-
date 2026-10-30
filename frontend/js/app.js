@@ -1,3 +1,6 @@
+const API_URL = "http://localhost:5113/api/tasks";
+let tasks = [];
+
 document.addEventListener('DOMContentLoaded', () => {
     const taskForm = document.getElementById('task-form');
     const titleInput = document.getElementById('title');
@@ -9,118 +12,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const listInProgress = document.getElementById('list-in-progress');
     const listDone = document.getElementById('list-done');
 
-    const timeSpan = document.getElementById('current-time');
-    const dateSpan = document.getElementById('current-date');
-
     let editingTaskLi = null;
 
-    
-    function updateDateTime() {
-        const now = new Date();
-        if (timeSpan) timeSpan.textContent = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        if (dateSpan) dateSpan.textContent = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
-    }
-    updateDateTime();
-    setInterval(updateDateTime, 1000);
+    function renderTasks() {
+        listTodo.innerHTML = '';
+        listInProgress.innerHTML = '';
+        listDone.innerHTML = '';
 
-    
-    function buildCardContent(li, title, description) {
-        const formattedDesc = description !== '' ? description : 'brak opisu';
-        const today = new Date();
-        const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+        tasks.forEach(task => {
+            const li = document.createElement('li');
+            li.className = 'task-card';
+            li.dataset.id = task.id;
+            li.dataset.status = task.status || 'new';
 
-        li.innerHTML = '';
-        li.className = 'task-card';
+            li.innerHTML = `
+                <aside class="card-left"><span class="dot"></span></aside>
+                <article class="card-content">
+                    <header class="card-top">
+                        <span class="task-title">${task.title}</span>
+                        <span class="task-date"></span>
+                    </header>
+                    <p class="task-desc">${task.description || 'no description'}</p>
+                    <nav class="card-actions">
+                        <button type="button" class="btn-edit">Edit</button>
+                        <button type="button" class="btn-finish">Status</button>
+                        <button type="button" class="btn-delete">Delete</button>
+                    </nav>
+                </article>
+            `;
 
-        
-        const aside = document.createElement('aside');
-        aside.className = 'card-left';
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        aside.appendChild(dot);
+            
+            li.querySelector('.btn-edit').addEventListener('click', () => {
+                titleInput.value = task.title;
+                descInput.value = task.description || '';
+                statusSelect.value = task.status || 'new';
+                editingTaskLi = li;
+                submitBtn.innerHTML = '<span class="plus-icon">✓</span> SAVE';
+            });
 
-        
-        const article = document.createElement('article');
-        article.className = 'card-content';
+            li.querySelector('.btn-finish').addEventListener('click', async () => {
+                let nextStatus = 'new';
+                if (li.dataset.status === 'new' || li.dataset.status === 'todo') nextStatus = 'in_progress';
+                else if (li.dataset.status === 'in_progress') nextStatus = 'done';
 
-        const header = document.createElement('header');
-        header.className = 'card-top';
+                await updateTaskStatus(task.id, nextStatus, task.title, task.description);
+            });
 
-        const titleSpan = document.createElement('span');
-        titleSpan.className = 'task-title';
-        titleSpan.textContent = title;
+            // Кнопка удаления
+            li.querySelector('.btn-delete').addEventListener('click', async () => {
+                try {
+                    const res = await fetch(`${API_URL}/${task.id}`, { method: 'DELETE' });
+                    if (res.ok) loadTasks();
+                } catch (err) {
+                    console.error('Delete error:', err);
+                }
+            });
 
-        const dateSpan = document.createElement('span');
-        dateSpan.className = 'task-date';
-        dateSpan.textContent = dateStr;
-
-        header.appendChild(titleSpan);
-        header.appendChild(dateSpan);
-
-        const descP = document.createElement('p');
-        descP.className = 'task-desc';
-        descP.textContent = formattedDesc;
-
-        
-        const nav = document.createElement('nav');
-        nav.className = 'card-actions';
-
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'btn-edit';
-        editBtn.textContent = 'Edytuj';
-        editBtn.addEventListener('click', () => {
-            titleInput.value = titleSpan.textContent;
-            descInput.value = descP.textContent === 'brak opisu' ? '' : descP.textContent;
-            statusSelect.value = li.dataset.status;
-
-            editingTaskLi = li;
-            submitBtn.innerHTML = '<span class="plus-icon">✓</span> ZAPISZ';
-            titleInput.focus();
+            if (li.dataset.status === 'in_progress') listInProgress.appendChild(li);
+            else if (li.dataset.status === 'done') listDone.appendChild(li);
+            else listTodo.appendChild(li);
         });
-
-        const moveBtn = document.createElement('button');
-        moveBtn.type = 'button';
-        moveBtn.className = 'btn-finish';
-        moveBtn.textContent = 'Zmień status';
-        moveBtn.addEventListener('click', () => {
-            let currentStatus = li.dataset.status;
-            let nextStatus = 'todo';
-            if (currentStatus === 'todo') nextStatus = 'in_progress';
-            else if (currentStatus === 'in_progress') nextStatus = 'done';
-            else if (currentStatus === 'done') nextStatus = 'todo';
-
-            placeCardInColumn(li, nextStatus);
-        });
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'btn-delete';
-        deleteBtn.textContent = 'Usuń';
-        deleteBtn.addEventListener('click', () => {
-            li.remove();
-        });
-
-        nav.appendChild(editBtn);
-        nav.appendChild(moveBtn);
-        nav.appendChild(deleteBtn);
-
-        article.appendChild(header);
-        article.appendChild(descP);
-        article.appendChild(nav);
-
-        li.appendChild(aside);
-        li.appendChild(article);
     }
 
-    function placeCardInColumn(li, status) {
-        li.dataset.status = status;
-        if (status === 'todo') listTodo.appendChild(li);
-        else if (status === 'in_progress') listInProgress.appendChild(li);
-        else if (status === 'done') listDone.appendChild(li);
+    async function loadTasks() {
+        try {
+            const response = await fetch(API_URL);
+            if (response.ok) {
+                tasks = await response.json();
+                renderTasks();
+            }
+        } catch (err) {
+            console.error('Load error:', err);
+        }
     }
 
-    
-    taskForm.addEventListener('submit', (e) => {
+    async function updateTaskStatus(id, status, title, description) {
+        try {
+            const res = await fetch(`${API_URL}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: Number(id), title, description, status })
+            });
+            if (res.ok) loadTasks();
+        } catch (err) {
+            console.error('Status update error:', err);
+        }
+    }
+
+    loadTasks();
+
+    taskForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const title = titleInput.value.trim();
         const description = descInput.value.trim();
@@ -128,28 +109,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!title) return;
 
-        if (editingTaskLi) {
-            buildCardContent(editingTaskLi, title, description);
-            placeCardInColumn(editingTaskLi, status);
-            editingTaskLi = null;
-            submitBtn.innerHTML = '<span class="plus-icon">+</span> DODAJ';
-        } else {
-            const li = document.createElement('li');
-            buildCardContent(li, title, description);
-            placeCardInColumn(li, status);
+        try {
+            if (editingTaskLi) {
+                const id = editingTaskLi.dataset.id;
+                const res = await fetch(`${API_URL}/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: Number(id), title, description, status })
+                });
+                if (res.ok) {
+                    editingTaskLi = null;
+                    submitBtn.innerHTML = '<span class="plus-icon">+</span> ADD';
+                }
+            } else {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, description, status })
+                });
+            }
+            taskForm.reset();
+            loadTasks();
+        } catch (err) {
+            console.error('Submit error:', err);
         }
-
-        taskForm.reset();
     });
-
-
-    function createDemoTask(title, desc, status) {
-        const li = document.createElement('li');
-        buildCardContent(li, title, desc, status);
-        placeCardInColumn(li, status);
-    }
-
-    createDemoTask('Przygotować makietę', 'Ekran listy i formularza', 'todo');
-    createDemoTask('Napisać kod JS', '', 'in_progress');
-    createDemoTask('Zaliczyć projekt', 'Wszystko gotowe', 'done');
 });
